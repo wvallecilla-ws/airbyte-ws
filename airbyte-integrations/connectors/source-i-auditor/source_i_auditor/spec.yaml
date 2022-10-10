@@ -1,0 +1,24 @@
+documentationUrl: https://docsurl.com
+connectionSpecification:
+  $schema: http://json-schema.org/draft-07/schema#
+  title: I Auditor Spec
+  type: object
+  required:
+    - api_auth_url
+    - grant_type 
+    - username
+    - password
+  properties:
+    # 'TODO: This schema defines the configuration required for the source. This usually involves metadata such as database and/or authentication information.':
+    api_auth_url:
+      type: string
+      description: OAuth API URL
+    grant_type:
+      type: string
+      description: Access Type
+    username:
+      type: string
+      description: Username
+    password:
+      type: string
+      description: Password

@@ -1,0 +1,41 @@
+{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "type": "object",
+    "properties": {
+      "count": {
+        "type": "integer"
+      },
+      "total": {
+        "type": "integer"
+      },
+      "audits": {
+        "type": "array",
+        "items": [
+          {
+            "type": "object",
+            "properties": {
+              "audit_id": {
+                "type": "string"
+              },
+              "modified_at": {
+                "type": "string"
+              },
+              "template_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "audit_id",
+              "modified_at",
+              "template_id"
+            ]
+          }
+        ]
+      }
+    },
+    "required": [
+      "count",
+      "total",
+      "audits"
+    ]
+  }
