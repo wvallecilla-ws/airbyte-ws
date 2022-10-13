@@ -4,79 +4,29 @@
 
 
 from abc import ABC
+from datetime import datetime
 from typing import Any, Iterable, List, Mapping, MutableMapping, Optional, Tuple
 
 import requests
 import logging
 import json
+from datetime import datetime, timedelta
 from airbyte_cdk.sources import AbstractSource
 from airbyte_cdk.sources.streams import Stream
 from airbyte_cdk.sources.streams.http import HttpStream
 from airbyte_cdk.sources.streams.http.auth import TokenAuthenticator
+from airbyte_cdk.sources.streams import IncrementalMixin
+
 
 logger = logging.getLogger("airbyte")
-
-"""
-TODO: Most comments in this class are instructive and should be deleted after the source is implemented.
-
-This file provides a stubbed example of how to use the Airbyte CDK to develop both a source connector which supports full refresh or and an
-incremental syncs from an HTTP API.
-
-The various TODOs are both implementation hints and steps - fulfilling all the TODOs should be sufficient to implement one basic and one incremental
-stream from a source. This pattern is the same one used by Airbyte internally to implement connectors.
-
-The approach here is not authoritative, and devs are free to use their own judgement.
-
-There are additional required TODOs in the files within the integration_tests folder and the spec.yaml file.
-"""
 
 
 # Basic full refresh stream
 class IAuditorStream(HttpStream, ABC):
-    """
-    TODO remove this comment
 
-    This class represents a stream output by the connector.
-    This is an abstract base class meant to contain all the common functionality at the API level e.g: the API base URL, pagination strategy,
-    parsing responses etc..
-
-    Each stream should extend this class (or another abstract subclass of it) to specify behavior unique to that stream.
-
-    Typically for REST APIs each stream corresponds to a resource in the API. For example if the API
-    contains the endpoints
-        - GET v1/customers
-        - GET v1/employees
-
-    then you should have three classes:
-    `class IAuditorStream(HttpStream, ABC)` which is the current class
-    `class Customers(IAuditorStream)` contains behavior to pull data for customers using v1/customers
-    `class Employees(IAuditorStream)` contains behavior to pull data for employees using v1/employees
-
-    If some streams implement incremental sync, it is typical to create another class
-    `class IncrementalIAuditorStream((IAuditorStream), ABC)` then have concrete stream implementations extend it. An example
-    is provided below.
-
-    See the reference docs for the full list of configurable options.
-    """
-
-    # TODO: Fill in the url base. Required.
     url_base = "https://api.safetyculture.io/"
 
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
-        """
-        TODO: Override this method to define a pagination strategy. If you will not be using pagination, no action is required - just return None.
-
-        This method should return a Mapping (e.g: dict) containing whatever information required to make paginated requests. This dict is passed
-        to most other methods in this class to help you form headers, request bodies, query params, etc..
-
-        For example, if the API accepts a 'page' parameter to determine which page of the result to return, and a response from the API contains a
-        'page' number, then this method should probably return a dict {'page': response.json()['page'] + 1} to increment the page count by 1.
-        The request_params method should then read the input next_page_token and set the 'page' param to next_page_token['page'].
-
-        :param response: the most recent response from the API
-        :return If there is another page in the result, a mapping (e.g: dict) containing information needed to query the next page in the response.
-                If there are no more pages in the result, return None.
-        """
         return None
 
     def request_params(
@@ -85,26 +35,10 @@ class IAuditorStream(HttpStream, ABC):
         stream_slice: Mapping[str, any] = None, 
         next_page_token: Mapping[str, Any] = None
     ) -> MutableMapping[str, Any]:
-        """
-        TODO: Override this method to define any query parameters to be set. Remove this method if you don't need to define request params.
-        Usually contains common params e.g. pagination size etc.
-        """
-        # params = {"page_size": 2}
-
-        # # Handle pagination by inserting the next page's token in the request parameters
-        # if next_page_token:
-        #     params.update(next_page_token)
-
-        # return params
-
         return {}
 
         
     def parse_response(self, response: requests.Response, **kwargs) -> Iterable[Mapping]:
-        """
-        TODO: Override this method to define how a response is parsed.
-        :return an iterable containing each record in the response
-        """
         return [response.json()]
 
 
@@ -226,17 +160,6 @@ class SourceIAuditor(AbstractSource):
         return tokens['access_token']
 
     def check_connection(self, logger, config) -> Tuple[bool, any]:
-        """
-        TODO: Implement a connection check to validate that the user-provided config can be used to connect to the underlying API
-
-        See https://github.com/airbytehq/airbyte/blob/master/airbyte-integrations/connectors/source-stripe/source_stripe/source.py#L232
-        for an example.
-
-        :param config:  the user-input config object conforming to the connector's spec.yaml
-        :param logger:  logger object
-        :return Tuple[bool, any]: (True, None) if the input config can be used to connect to the API successfully, (False, error) otherwise.
-        """
-
         token = self.get_new_token(config)
         api_call_headers = {'Authorization': 'Bearer ' + token}
         api_call_response = requests.get(
@@ -248,35 +171,80 @@ class SourceIAuditor(AbstractSource):
         return True, None
 
     def streams(self, config: Mapping[str, Any]) -> List[Stream]:
-        """
-        TODO: Replace the streams below with your own streams.
-
-        :param config: A Mapping of the user input configuration as defined in the connector spec.
-        """
-        # TODO remove the authenticator if not required.
-        # Oauth2Authenticator is also available if you need oauth support
         access_token = self.get_new_token(config)
+        start_date = datetime.strptime('2001-01-01', '%Y-%m-%d')
         auth = TokenAuthenticator(token=access_token)
-        return [Audits(authenticator=auth)]
+        return [Audits(authenticator=auth, start_date=start_date)]
 
 
 
-class Audits(IAuditorStream):
-    """
-    TODO: Change class name to match the table/data source this stream corresponds to.
-    """
+class Audits(IAuditorStream, IncrementalMixin):
 
-    # TODO: Fill in the primary key. Required. This is usually a unique field in the stream, like an ID or a timestamp.
+    cursor_field = "modified_at"
+    cursor_filter = "modified_after"
+    date_format = '%Y-%m-%dT%H:%M:%S.%fZ'
     primary_key = None
-    modified_after = '2022-01-01+00%3A00%3A00%2B00%3A00'
-    modified_before = '2022-04-04+11%3A25%3A59%2B00%3A00'
-    archived = 'both'
+
+    def __init__(self, authenticator: Any, start_date: datetime, **kwargs):
+        super().__init__(authenticator)
+        self.start_date = start_date
+        self._cursor_value = None
+        self.modified_after = '2001-01-01T00:00:00.000Z'
+        self.modified_before = '2023-04-04'
+        self.archived = 'both'
 
     def path(
         self, stream_state: Mapping[str, Any] = None, stream_slice: Mapping[str, Any] = None, next_page_token: Mapping[str, Any] = None
     ) -> str:
-        """
-        TODO: Override this method to define the path this stream corresponds to. E.g. if the url is https://example-api.com/v1/customers then this
-        should return "customers". Required.
-        """
         return "audits/search"
+
+    def request_params(
+        self, stream_state: Mapping[str, Any], stream_slice: Mapping[str, any] = None, next_page_token: Mapping[str, Any] = None
+    ) -> MutableMapping[str, Any]:
+        if self._cursor_value:
+            return { 'modified_after': self._cursor_value,
+                 'archived': self.archived
+                    }
+        else:
+            return { 'modified_after': self.modified_after,
+                 'archived': self.archived
+                    }
+    
+    def read_records(self, *args, **kwargs) -> Iterable[Mapping[str, Any]]:
+        for record in super().read_records(*args, **kwargs):
+            if bool(record):
+                logger.info(record['audits'][-1])
+            else:
+                break
+
+            latest_record_date = datetime.strptime(record['audits'][-1][self.cursor_field], self.date_format)
+            if self._cursor_value:
+                self._cursor_value = max(self._cursor_value, latest_record_date)
+            else:
+                self._cursor_value =latest_record_date
+            yield record
+            
+
+    @property
+    def state(self) -> Mapping[str, Any]:
+        if self._cursor_value:
+            return {self.cursor_filter: self._cursor_value.strftime(self.date_format)}
+        else:
+            return {self.cursor_filter: self.start_date.strftime(self.date_format)}
+    
+    @state.setter
+    def state(self, value: Mapping[str, Any]):
+        logger.info('value')
+        logger.info(value)
+        self._cursor_value = datetime.strptime(value[self.cursor_field], self.date_format)
+
+    def _chunk_date_range(self, start_date: datetime) -> List[Mapping[str, Any]]:
+        dates = []
+        while start_date < datetime.now():
+            dates.append({self.cursor_filter: start_date.strftime(self.date_format)})
+            start_date += timedelta(days=30)
+        return dates
+
+    def stream_slices(self, sync_mode, cursor_field: List[str] = None, stream_state: Mapping[str, Any] = None) -> Iterable[Optional[Mapping[str, Any]]]:
+        start_date = datetime.strptime(stream_state[self.cursor_field], self.date_format) if stream_state and self.cursor_filter in stream_state else self.start_date
+        return self._chunk_date_range(start_date)
