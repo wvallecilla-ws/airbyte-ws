@@ -104,6 +104,15 @@ class Audits(IAuditorStream, IncrementalMixin):
     
     def read_records(self, *args, **kwargs) -> Iterable[Mapping[str, Any]]:
         for record in super().read_records(*args, **kwargs):
+            auditRecords = record.get('audits',False)
+            for aRecord in auditRecords:
+                latest_record_date = datetime.strptime(aRecord[self.cursor_field], self.date_format)
+                if self._cursor_value:
+                    self._cursor_value = max(self._cursor_value, latest_record_date)
+                else:
+                    self._cursor_value =latest_record_date
+                yield aRecord
+            """ antes
             if record.get('audits',False):
                 latest_record_date = datetime.strptime(record['audits'][-1][self.cursor_field], self.date_format)
                 if self._cursor_value:
@@ -111,9 +120,16 @@ class Audits(IAuditorStream, IncrementalMixin):
                 else:
                     self._cursor_value =latest_record_date
                 yield record
+            """
 
     def next_page_token(self, response: requests.Response) -> Optional[Mapping[str, Any]]:
         decoded_response = response.json()
+        if decoded_response.get("count", False):
+            return decoded_response.get("count")
+        else:
+            return decoded_response.get("next_token")
+
+        """ antes
         if decoded_response.get("count", False):
             if decoded_response['count'] == 1000:
                 logger.info('counter = 1000')
@@ -121,13 +137,15 @@ class Audits(IAuditorStream, IncrementalMixin):
                 return {self.cursor_field: latest_record_date}
             else:
                 logger.info('counter != 1000')
+        """
 
     @property
     def state(self) -> Mapping[str, Any]:
         if self._cursor_value:
-            return {self.cursor_filter: self._cursor_value.strftime(self.date_format)}
+            self._cursor_value+= timedelta(milliseconds=1)
+            return {self.cursor_field: self._cursor_value.strftime(self.date_format)}
         else:
-            return {self.cursor_filter: self.start_date.strftime(self.date_format)}
+            return {self.cursor_field: self.start_date.strftime(self.date_format)}
     
     @state.setter
     def state(self, value: Mapping[str, Any]):
