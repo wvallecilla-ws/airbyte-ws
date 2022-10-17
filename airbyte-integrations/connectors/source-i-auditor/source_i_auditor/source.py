@@ -58,7 +58,7 @@ class SourceIAuditor(AbstractSource):
         token = self.get_new_token(config)
         api_call_headers = {'Authorization': 'Bearer ' + token}
         api_call_response = requests.get(
-            config["api_url_base"], headers=api_call_headers, verify=False)
+            "https://api.safetyculture.io/audits/search", headers=api_call_headers, verify=False)
         logger.info(api_call_response.status_code)
         # logger.info(json.loads(api_call_response.text))
         logger.info("Completed")
